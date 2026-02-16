@@ -1,0 +1,8 @@
+{
+  "name": "LOCSETVR",
+  "description": "A PWA for 3D scanning environments and viewing them in VR using WebXR.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
