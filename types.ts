@@ -40,7 +40,7 @@ export interface DigitalCloneRecord {
 }
 
 export interface ScanStatus {
-  step: 'idle' | 'capturing' | 'processing' | 'saving' | 'complete' | 'error';
+  step: 'idle' | 'capturing' | 'recording' | 'processing' | 'saving' | 'complete' | 'error';
   progress: number;
   message: string;
 }
