@@ -11,15 +11,13 @@ const Home: React.FC = () => {
     setDebugStatus('TEST STARTED: Sending request...');
     console.log('--- TEST A: Start ---');
 
-    // Payload corretto per World Labs Marble API
-    // FIX: Aggiunto discriminatore 'type' e struttura corretta per image uri
+    // Payload corretto per World Labs Marble API secondo le specifiche aggiornate
     const payload = {
-      model: "marble-0.1-mini",
-      name: "Test World A",
+      model: 'Marble 0.1-mini',
       world_prompt: {
-        type: "image",
-        image: { 
-            uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/360_panorama_of_Interlaken.jpg/1280px-360_panorama_of_Interlaken.jpg" 
+        type: 'image',
+        image_prompt: {
+          url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/360_panorama_of_Interlaken.jpg/1280px-360_panorama_of_Interlaken.jpg'
         }
       }
     };
