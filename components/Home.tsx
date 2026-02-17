@@ -11,14 +11,14 @@ const Home: React.FC = () => {
     setDebugStatus('TEST STARTED: Sending request...');
     console.log('--- TEST A: Start ---');
 
-    // Payload di test "A" richiesto (Single Image URL)
-    // URL Esempio: Panorama di Interlaken (Wikimedia Commons)
+    // Payload corretto per World Labs Marble API
+    // 1. La chiave principale deve essere 'world_prompt' (non 'prompt')
+    // 2. Per le immagini si usa 'uri' (non 'url')
     const payload = {
-      model: "Marble 0.1-mini", // Come richiesto
-      prompt: {
-        kind: "image",
+      name: "Test World A",
+      world_prompt: {
         image: { 
-            url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/360_panorama_of_Interlaken.jpg/1280px-360_panorama_of_Interlaken.jpg" 
+            uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/360_panorama_of_Interlaken.jpg/1280px-360_panorama_of_Interlaken.jpg" 
         }
       }
     };
