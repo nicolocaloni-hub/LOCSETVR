@@ -12,11 +12,12 @@ const Home: React.FC = () => {
     console.log('--- TEST A: Start ---');
 
     // Payload corretto per World Labs Marble API
-    // 1. La chiave principale deve essere 'world_prompt' (non 'prompt')
-    // 2. Per le immagini si usa 'uri' (non 'url')
+    // FIX: Aggiunto discriminatore 'type' e struttura corretta per image uri
     const payload = {
+      model: "marble-0.1-mini",
       name: "Test World A",
       world_prompt: {
+        type: "image",
         image: { 
             uri: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/360_panorama_of_Interlaken.jpg/1280px-360_panorama_of_Interlaken.jpg" 
         }
