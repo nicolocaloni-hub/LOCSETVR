@@ -14,12 +14,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ message: 'Internal Server Error: Configuration missing' });
   }
 
-  if (!id) {
-    return res.status(400).json({ message: 'Missing operation ID' });
+  if (!id || Array.isArray(id)) {
+    return res.status(400).json({ message: 'Missing or invalid operation ID' });
   }
 
   try {
-    const response = await fetch(`https://api.worldlabs.ai/marble/v1/operations/${id}`, {
+    // Encode the ID to safely handle "operations/xxxx" formats if passed directly
+    const upstreamUrl = `https://api.worldlabs.ai/marble/v1/operations/${encodeURIComponent(id)}`;
+
+    const response = await fetch(upstreamUrl, {
+      method: 'GET',
       headers: {
         'WLT-Api-Key': WLT_KEY,
       },

@@ -1,9 +1,95 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+  const [debugStatus, setDebugStatus] = useState<string>('');
+
+  // --- DEBUG / TEST A LOGIC ---
+  const testGenerateWorld = async () => {
+    setDebugStatus('TEST STARTED: Sending request...');
+    console.log('--- TEST A: Start ---');
+
+    // Payload di test "A" richiesto (Single Image URL)
+    // URL Esempio: Panorama di Interlaken (Wikimedia Commons)
+    const payload = {
+      model: "Marble 0.1-mini", // Come richiesto
+      prompt: {
+        kind: "image",
+        image: { 
+            url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/360_panorama_of_Interlaken.jpg/1280px-360_panorama_of_Interlaken.jpg" 
+        }
+      }
+    };
+
+    try {
+      const res = await fetch('/api/worlds/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      console.log('Generate Response:', data);
+
+      if (!res.ok) {
+        setDebugStatus(`ERROR: ${res.status} - ${JSON.stringify(data)}`);
+        return;
+      }
+
+      // L'API ritorna solitamente un oggetto Operation con un campo "name" (es. "operations/...")
+      const operationName = data.name || data.operation_id;
+      if (operationName) {
+        setDebugStatus(`JOB CREATED: ${operationName}. Polling...`);
+        pollOperation(operationName);
+      } else {
+        setDebugStatus('ERROR: No operation name in response.');
+      }
+
+    } catch (e: any) {
+      console.error(e);
+      setDebugStatus(`EXCEPTION: ${e.message}`);
+    }
+  };
+
+  const pollOperation = (operationName: string) => {
+    // Estrae ID se il formato è "operations/xyz"
+    const id = operationName.split('/').pop() || operationName;
+
+    const interval = setInterval(async () => {
+        try {
+            console.log(`Polling ID: ${id}...`);
+            const res = await fetch(`/api/operations/${id}`);
+            const data = await res.json();
+            
+            // Verifica campo done (o status)
+            const isDone = data.done === true || data.status === 'completed';
+            
+            if (isDone) {
+                clearInterval(interval);
+                setDebugStatus('SUCCESS! Check Console for Assets.');
+                console.log('--- TEST A SUCCESS ---');
+                console.log('Assets:', data.response?.assets || data.result?.assets);
+                console.log('Full Data:', data);
+            } else {
+                const progress = data.metadata?.progress || 'running';
+                setDebugStatus(`POLLING: ${JSON.stringify(progress)}`);
+                console.log('Status:', data);
+            }
+
+            if (data.error) {
+                clearInterval(interval);
+                setDebugStatus(`FAILED: ${JSON.stringify(data.error)}`);
+                console.error('Operation Failed:', data.error);
+            }
+
+        } catch (e) {
+            console.error("Polling error", e);
+        }
+    }, 3000); // Poll ogni 3 secondi
+  };
+  // --- END DEBUG LOGIC ---
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-white relative overflow-hidden">
@@ -44,7 +130,20 @@ const Home: React.FC = () => {
         </div>
       </div>
       
-      <footer className="absolute bottom-6 text-[10px] text-slate-700 font-mono">
+      {/* DEBUG PANEL - TEST A */}
+      <div className="absolute bottom-4 left-4 z-20 flex flex-col items-start gap-2">
+         <div className="bg-black/50 text-[10px] text-green-400 font-mono p-1 rounded max-w-[200px] break-all text-left">
+            {debugStatus}
+         </div>
+         <button 
+            onClick={testGenerateWorld}
+            className="bg-red-900/50 hover:bg-red-800 text-red-200 text-[10px] px-3 py-1 rounded border border-red-500/30 uppercase font-bold"
+         >
+            <i className="fa-solid fa-bug mr-1"></i> TEST A: Generate World (URL)
+         </button>
+      </div>
+      
+      <footer className="absolute bottom-6 text-[10px] text-slate-700 font-mono pointer-events-none">
         v3.0-SPLATS • WEBXR READY
       </footer>
     </div>

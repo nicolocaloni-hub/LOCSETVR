@@ -14,18 +14,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // Robust body parsing: Vercel parsing behavior can vary based on content-type headers
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+
     // Proxy request to World Labs
-    // Headers: Content-Type is passed implies JSON body from client
     const response = await fetch('https://api.worldlabs.ai/marble/v1/worlds:generate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'WLT-Api-Key': WLT_KEY,
       },
-      body: JSON.stringify(req.body),
+      body: JSON.stringify(body),
     });
 
-    const data = await response.json();
+    // Get response text first to avoid JSON parsing errors if upstream fails with HTML/Text
+    const responseText = await response.text();
+    let data;
+    try {
+        data = JSON.parse(responseText);
+    } catch (e) {
+        data = { raw: responseText };
+    }
 
     if (!response.ok) {
       console.error('World Labs API Error:', data);
