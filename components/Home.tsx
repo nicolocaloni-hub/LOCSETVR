@@ -12,13 +12,12 @@ const Home: React.FC = () => {
     console.log('--- TEST A: Start ---');
 
     // Payload corretto per World Labs Marble API
-    // FIX: Aggiunto 'source': 'url' richiesto dal discriminatore dello schema
+    // Schema: { model, name, world_prompt: { image: { source: 'url', url: '...' } } }
     const payload = {
       name: "Test World Interlaken",
       model: "Marble 0.1-mini",
       world_prompt: {
-        type: "image",
-        image_prompt: {
+        image: {
           source: "url",
           url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/360_panorama_of_Interlaken.jpg/1280px-360_panorama_of_Interlaken.jpg"
         }
