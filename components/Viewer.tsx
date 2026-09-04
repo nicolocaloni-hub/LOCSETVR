@@ -106,7 +106,7 @@ const addCapturedEnvironment = async (
   for (const panel of walls) {
     const texture = await createPhotoTexture(record.images[panel.imageIndex], renderer);
     const span = 360 / Math.max(1, walls.length);
-    const angle = THREE.MathUtils.degToRad(180 + panel.yaw);
+    const angle = THREE.MathUtils.degToRad(180 - panel.yaw);
     const width = 2 * radius * Math.tan(THREE.MathUtils.degToRad(span / 2)) * 1.025;
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
@@ -121,7 +121,7 @@ const addCapturedEnvironment = async (
     const texture = await createPhotoTexture(record.images[panel.imageIndex], renderer);
     const span = 360 / Math.max(1, lower.length);
     const mesh = new THREE.Mesh(
-      createSectorGeometry(radius, 180 + panel.yaw, span * 1.025, 0.015),
+      createSectorGeometry(radius, 180 - panel.yaw, span * 1.025, 0.015),
       createProjectionMaterial(texture),
     );
     scene.add(mesh);
@@ -135,7 +135,7 @@ const addCapturedEnvironment = async (
         radius,
         18,
         10,
-        Math.PI + THREE.MathUtils.degToRad(panel.yaw - span / 2),
+        THREE.MathUtils.degToRad(270 - panel.yaw - span / 2),
         THREE.MathUtils.degToRad(span * 1.02),
         0,
         Math.PI / 2,
@@ -147,7 +147,7 @@ const addCapturedEnvironment = async (
       const texture = await createPhotoTexture(record.images[panel.imageIndex], renderer);
       const span = 360 / Math.max(1, upper.length);
       const mesh = new THREE.Mesh(
-        createSectorGeometry(radius, 180 + panel.yaw, span * 1.025, height - 0.015),
+        createSectorGeometry(radius, 180 - panel.yaw, span * 1.025, height - 0.015),
         createProjectionMaterial(texture),
       );
       scene.add(mesh);

@@ -142,6 +142,7 @@ export const reconstructLocally = async (
       yaw: frames[index].shot.yaw,
       pitch: frames[index].shot.pitch,
       role: frames[index].shot.role,
+      pose: frames[index].pose,
       brightness: quality.brightness,
       sharpness: quality.sharpness,
     });

@@ -16,7 +16,7 @@ const upgradeRecord = (raw: unknown): DigitalCloneRecord | null => {
   const legacyPanels = candidate.reconstruction?.panels?.map((panel, imageIndex) => ({
     ...panel,
     imageIndex,
-    yaw: Math.abs(panel.yaw) <= Math.PI * 2 + 0.01 ? THREE_RAD_TO_DEG * panel.yaw : panel.yaw,
+    yaw: panel.role === undefined ? THREE_RAD_TO_DEG * panel.yaw : panel.yaw,
     pitch: panel.pitch ?? 0,
     role: panel.role ?? 'wall' as const,
   })) || candidate.images.map((_, imageIndex) => ({

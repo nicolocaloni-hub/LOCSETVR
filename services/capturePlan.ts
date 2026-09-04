@@ -20,6 +20,15 @@ const roleText: Record<SurfaceRole, { label: string; instruction: string }> = {
   sky: { label: 'Cielo e contesto alto', instruction: 'Inclina il telefono verso l’alto e copri l’orizzonte' },
 };
 
+export const directionLabel = (yaw: number): string => {
+  const directions = ['Davanti', 'Davanti a destra', 'Destra', 'Dietro a destra', 'Dietro', 'Dietro a sinistra', 'Sinistra', 'Davanti a sinistra'];
+  return directions[Math.round(((yaw % 360 + 360) % 360) / 45) % 8];
+};
+
+export const shotLabel = (shot: CaptureShot): string => shot.role === 'wall'
+  ? directionLabel(shot.yaw)
+  : `${shot.label} · ${directionLabel(shot.yaw).toLowerCase()}`;
+
 const ring = (role: SurfaceRole, count: number, pitch: number, offset = 0): CaptureShot[] =>
   Array.from({ length: count }, (_, index) => {
     const yaw = offset + (index / count) * 360;
@@ -29,7 +38,9 @@ const ring = (role: SurfaceRole, count: number, pitch: number, offset = 0): Capt
       yaw,
       pitch,
       label: roleText[role].label,
-      instruction: roleText[role].instruction,
+      instruction: role === 'wall' && index === 0
+        ? 'Inquadra davanti a te, con il telefono all’altezza degli occhi'
+        : `${roleText[role].instruction}. ${directionLabel(yaw)}`,
     };
   });
 

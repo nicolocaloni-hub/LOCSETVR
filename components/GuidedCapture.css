@@ -1,0 +1,81 @@
+/* Keep the aiming reticle at the optical centre of the camera image. */
+.guided-capture { position: fixed; inset: 0; min-height: 0; height: 100dvh; }
+.guided-capture .capture-hud { inset: 0; border: 0; }
+.guided-capture .capture-shade { background: linear-gradient(180deg,rgba(4,8,5,.65),transparent 38%,transparent 54%,rgba(4,8,5,.82) 79%,#090e0b); }
+.guided-capture .capture-crosshair { width: 64px; height: 64px; border-width: 2px; }
+.guided-capture .capture-crosshair--ready { border-color: var(--lime); box-shadow: 0 0 0 9px rgba(200,255,69,.1); }
+.guided-capture .capture-target { transition: left .08s linear, top .08s linear; }
+.guided-top { position: absolute; z-index: 4; top: max(86px,calc(env(safe-area-inset-top) + 68px)); left: 24px; right: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; pointer-events: none; }
+.guided-direction { display: flex; flex-direction: column; max-width: 250px; gap: 7px; padding: 14px; border: 1px solid rgba(255,255,255,.14); border-radius: 14px; background: rgba(8,13,9,.6); backdrop-filter: blur(12px); }
+.guided-direction .eyebrow { margin: 0; font-size: 10px; color: #bdd3a5; }
+.guided-direction>strong { font-size: clamp(19px,2.3vw,30px); line-height: 1.1; letter-spacing: -.03em; }
+.guided-sensor { max-width: 190px; color: #c0c9bb; font-size: 11px; line-height: 1.4; }
+.guided-compass { display: flex; align-items: center; gap: 9px; color: #d6e0ce; font: 600 11px ui-monospace,monospace; }
+.guided-compass i { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid #81946c; border-radius: 50%; color: var(--lime); font-size: 20px; font-style: normal; transition: transform .25s; }
+.guided-compass>span:first-child { font-size: 9px; }
+.guided-preview { pointer-events: auto; }
+.guided-preview-toggle { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; min-height: 32px; margin-top: 5px; border: 1px solid rgba(255,255,255,.16); border-radius: 9px; background: rgba(8,13,9,.78); color: #ebf2e7; font-size: 11px; cursor: pointer; }
+.guided-preview--expanded { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 30; box-shadow: 0 0 0 100vmax rgba(3,7,4,.83); border-radius: 20px; }
+.guided-bottom { position: absolute; z-index: 6; bottom: 0; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; width: min(100%,640px); padding: 0 20px max(15px,env(safe-area-inset-bottom)); }
+.guided-instruction { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 15px; border: 1px solid rgba(255,255,255,.2); border-radius: 15px; background: rgba(7,13,9,.83); backdrop-filter: blur(14px); }
+.guided-arrow { flex: 0 0 36px; color: #e9f1e1; text-align: center; font-size: 32px; line-height: 1; }
+.guided-arrow.ready { color: var(--lime); }
+.guided-instruction strong { display: block; font-size: 16px; line-height: 1.25; }
+.guided-instruction p { margin: 5px 0 0; color: #c1cdb8; font-size: 12px; line-height: 1.4; }
+.guided-manual { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; margin-top: 5px; padding: 3px 10px; border: 0; background: transparent; color: var(--lime); text-decoration: underline; text-underline-offset: 3px; font-size: 12px; cursor: pointer; }
+.guided-accepted { position: absolute; bottom: calc(100% + 8px); left: 20px; right: 20px; display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; padding: 8px; border-radius: 9px; background: rgba(17,36,15,.92); color: #d3ffa2; font-size: 12px; pointer-events: none; }
+.guided-stages { display: flex; width: 100%; gap: 10px; margin: 12px 0 8px; padding: 0; list-style: none; }
+.guided-stages li { position: relative; display: flex; justify-content: space-between; flex: 1; padding: 0 0 9px; border-bottom: 3px solid rgba(255,255,255,.18); color: #939f8a; font-size: 11px; }
+.guided-stages b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.guided-stages li.active { color: white; }
+.guided-stages li.done { color: var(--lime); }
+.guided-stages li i { position: absolute; left: 0; bottom: -3px; height: 3px; border-radius: 4px; background: var(--lime); transition: width .2s; }
+.guided-capture .capture-thumbs { min-height: 5px; width: 100%; padding-bottom: 8px; }
+.guided-capture .capture-thumb { flex: 0 0 43px; height: 33px; }
+.guided-capture .capture-thumb--floor,.guided-capture .capture-thumb--ground { border-bottom: 3px solid #ffc889; }
+.guided-capture .capture-thumb--ceiling,.guided-capture .capture-thumb--sky { border-bottom: 3px solid #94c5ff; }
+.guided-capture .capture-actions { width: 100%; }
+.guided-capture .glass-button--label { min-height: 50px; font-size: 11px; }
+.guided-capture .capture-finish { display: grid; grid-template-columns: 1fr auto; width: 100%; margin-top: 3px; }
+.guided-capture .capture-finish label { display: flex; padding: 8px 12px; font-size: 10px; }
+.guided-capture .capture-finish input { font-size: 16px; min-width: 0; }
+.guided-capture .capture-error { font-size: 12px; line-height: 1.35; }
+.guided-capture .camera-fallback { top: 47%; max-width: 360px; padding: 16px; }
+.guided-capture .camera-fallback p { font-size: 12px; }
+
+@media (max-width:680px) {
+  .guided-top { left: 14px; right: 14px; top: max(78px,calc(env(safe-area-inset-top) + 64px)); gap: 12px; }
+  .guided-direction { max-width: 175px; padding: 10px; }
+  .guided-direction>strong { font-size: 19px; }
+  .guided-sensor { font-size: 10px; }
+  .guided-bottom { padding-inline: 14px; }
+  .guided-instruction { padding: 11px; gap: 9px; }
+  .guided-instruction strong { font-size: 15px; }
+  .guided-instruction p { font-size: 12px; }
+  .guided-stages { gap: 8px; }
+  .guided-capture .shutter { width: 66px; height: 66px; }
+  .guided-capture .capture-finish { grid-template-columns: 1fr; gap: 7px; }
+  .guided-capture .capture-finish label { min-height: 49px; }
+  .guided-capture .capture-finish .primary-button { min-height: 46px; }
+}
+@media (max-height:700px) {
+  .guided-top { top: 68px; }
+  .guided-direction { padding: 9px; gap: 5px; }
+  .guided-sensor { display: none; }
+  .guided-instruction { padding: 8px 10px; }
+  .guided-instruction strong { font-size: 14px; }
+  .guided-instruction p { font-size: 11px; margin-top: 3px; }
+  .guided-stages { margin-top: 8px; margin-bottom: 5px; }
+  .guided-capture .capture-thumb { height: 27px; }
+  .guided-capture .shutter { width: 56px; height: 56px; }
+  .guided-bottom { padding-bottom: max(10px,env(safe-area-inset-bottom)); }
+}
+@media (orientation:landscape) and (max-height:520px) {
+  .guided-top { right: auto; max-width: 40%; top: 74px; }
+  .guided-direction { max-width: 120px; }
+  .guided-direction>strong { font-size: 15px; }
+  .guided-preview { display: none; }
+  .guided-bottom { left: auto; right: 12px; transform: none; width: 42%; padding-inline: 0; }
+  .guided-capture .capture-thumbs { display: none; }
+  .guided-capture .capture-finish { grid-template-columns: 1fr; }
+}

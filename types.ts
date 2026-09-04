@@ -22,6 +22,7 @@ export type CapturedFrame = {
   blob: Blob;
   shot: CaptureShot;
   quality: CaptureQuality;
+  pose?: { yaw: number; pitch: number; roll: number; source: 'sensor' | 'manual' };
 };
 
 export type SpatialPanel = {
@@ -31,6 +32,7 @@ export type SpatialPanel = {
   role: SurfaceRole;
   brightness: number;
   sharpness: number;
+  pose?: CapturedFrame['pose'];
 };
 
 export type SpatialReconstruction = {
