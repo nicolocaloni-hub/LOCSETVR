@@ -1,73 +1,70 @@
+export type CaptureQuality = {
+  brightness: number;
+  sharpness: number;
+  accepted: boolean;
+  message: string;
+};
 
-export type CloneStatus = 'draft' | 'uploading' | 'processing' | 'ready' | 'error';
+export type SpatialPanel = {
+  imageIndex: number;
+  yaw: number;
+  brightness: number;
+  sharpness: number;
+};
 
-export interface SceneObject {
+export type SpatialReconstruction = {
+  version: 1;
+  roomRadius: number;
+  roomHeight: number;
+  floorColor: string;
+  ceilingColor: string;
+  panels: SpatialPanel[];
+  fidelity: 'local-spatial-preview';
+};
+
+export type PropKind = 'camera' | 'light' | 'talent' | 'dolly' | 'marker';
+
+export type SceneProp = {
   id: string;
-  type: 'gltf' | 'primitive';
-  url: string; // URL dell'asset glTF
+  kind: PropKind;
+  label: string;
   position: [number, number, number];
-  rotation: [number, number, number];
-  scale: [number, number, number];
-}
+  rotationY: number;
+  color: string;
+};
 
-export interface MaskVolume {
+export type MaskVolume = {
   id: string;
-  shape: 'box' | 'sphere';
   position: [number, number, number];
-  rotation: [number, number, number];
   size: [number, number, number];
-  enabled: boolean;
-}
+};
 
-export interface SceneEdits {
-  objects: SceneObject[];
+export type SceneEdits = {
+  objects: SceneProp[];
   masks: MaskVolume[];
-}
+};
 
-export interface DigitalCloneRecord {
+export type DigitalCloneRecord = {
   id: string;
   name: string;
   date: string;
-  status: CloneStatus;
-  images: Blob[]; 
+  updatedAt: string;
+  status: 'ready';
+  images: Blob[];
   thumbnail: string;
-  worldId?: string; 
-  operationId?: string; // ID per polling su Vercel/WorldLabs
-  spzBlob?: Blob;   
-  colliderMeshBlob?: Blob; // Per teleport e staging
-  edits?: SceneEdits;
-  error?: string;
-}
+  reconstruction: SpatialReconstruction;
+  edits: SceneEdits;
+  isDemo?: boolean;
+};
 
-export interface ScanStatus {
-  step: 'idle' | 'capturing' | 'recording' | 'processing' | 'saving' | 'complete' | 'error';
+export type ModelRecord = DigitalCloneRecord;
+
+export type ReconstructionProgress = {
   progress: number;
   message: string;
-}
+};
 
-export interface PanoramaNode {
-  id: string;
-  name: string;
-  imageBlob: Blob;
-  yawOffset: number;
-  hotspots: any[];
-}
-
-export interface TourRecord {
-  id: string;
-  name: string;
-  date: string;
-  thumbnail: string;
-  nodes: PanoramaNode[];
-  startNodeId: string;
-}
-
-export interface VideoScanRecord {
-  id: string;
-  name: string;
-  date: string;
-  type: 'video';
-  thumbnail: string;
-}
-
-export type ModelRecord = DigitalCloneRecord | VideoScanRecord | TourRecord;
+export type PortableClone = Omit<DigitalCloneRecord, 'images'> & {
+  format: 'locsetvr-project';
+  images: string[];
+};

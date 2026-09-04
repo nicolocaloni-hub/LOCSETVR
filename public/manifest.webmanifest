@@ -1,0 +1,19 @@
+{
+  "name": "LOCSETVR — Location scouting spaziale",
+  "short_name": "LOCSETVR",
+  "description": "Acquisisci, esplora e pianifica location audiovisive in 3D e VR.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#121411",
+  "theme_color": "#121411",
+  "icons": [
+    {
+      "src": "/locsetvr-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

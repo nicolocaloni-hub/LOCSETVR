@@ -1,196 +1,129 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllModels, deleteModel, saveModel } from '../services/storage';
-import { ModelRecord, DigitalCloneRecord } from '../types';
-import { createWorldJob, pollJobStatus, downloadAsset } from '../services/worldLabs';
+import type { DigitalCloneRecord } from '../types';
+import { deleteModel, getAllModels, saveModel } from '../services/storage';
+import { createDemoRecord } from '../services/reconstruction';
+import { parsePortableProject, shareProject } from '../services/share';
+import AppFrame from './AppFrame';
+import { Icon } from './Icon';
 
 const Library: React.FC = () => {
-  const [models, setModels] = useState<ModelRecord[]>([]);
   const navigate = useNavigate();
+  const importRef = useRef<HTMLInputElement>(null);
+  const [models, setModels] = useState<DigitalCloneRecord[]>([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DigitalCloneRecord | null>(null);
+  const [notice, setNotice] = useState('');
 
-  const loadData = async () => {
+  const loadModels = async () => {
     setLoading(true);
     try {
-      const data = await getAllModels();
-      data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setModels(data);
-    } catch (e) {
-      console.error(e);
+      const stored = await getAllModels();
+      setModels([createDemoRecord(), ...stored.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))]);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => { void loadModels(); }, []);
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(''), 3200);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
-  const handleGenerateWorld = async (e: React.MouseEvent, record: DigitalCloneRecord) => {
-    e.stopPropagation();
-    if (processingId) return;
+  const visibleModels = useMemo(
+    () => models.filter((model) => model.name.toLowerCase().includes(search.toLowerCase().trim())),
+    [models, search],
+  );
 
+  const handleShare = async (model: DigitalCloneRecord) => {
     try {
-      setProcessingId(record.id);
-      
-      const updatedRecord: DigitalCloneRecord = { ...record, status: 'uploading' };
-      await saveModel(updatedRecord);
-      loadData();
-
-      const opId = await createWorldJob(updatedRecord);
-      updatedRecord.operationId = opId;
-      updatedRecord.status = 'processing';
-      await saveModel(updatedRecord);
-      loadData();
-
-      // Polling
-      let completed = false;
-      let finalData = null;
-      while (!completed) {
-        await new Promise(r => setTimeout(r, 5000));
-        const statusResponse = await pollJobStatus(opId);
-        
-        if (statusResponse.status === 'completed') {
-          completed = true;
-          finalData = statusResponse.result;
-        } else if (statusResponse.status === 'failed') {
-          throw new Error("Generation failed on World Labs.");
-        }
-      }
-
-      if (finalData) {
-        updatedRecord.status = 'ready';
-        updatedRecord.worldId = finalData.world_id;
-        
-        // Scarichiamo gli asset necessari
-        // Usiamo la versione 500k splats come default bilanciato
-        const spzUrl = finalData.assets.splats.spz_urls['500k'] || finalData.assets.splats.spz_urls['full_res'];
-        const colliderUrl = finalData.assets.mesh.collider_mesh_url;
-
-        const [spzBlob, colliderBlob] = await Promise.all([
-            downloadAsset(spzUrl),
-            downloadAsset(colliderUrl)
-        ]);
-
-        updatedRecord.spzBlob = spzBlob;
-        updatedRecord.colliderMeshBlob = colliderBlob;
-        
-        // Inizializziamo gli edits vuoti
-        updatedRecord.edits = { objects: [], masks: [] };
-
-        await saveModel(updatedRecord);
-        loadData();
-        alert("Digital Clone ready for Editing & VR!");
-      }
-
-    } catch (err: any) {
-      console.error(err);
-      const failedRecord: DigitalCloneRecord = { ...record, status: 'error', error: err.message };
-      await saveModel(failedRecord);
-      loadData();
-      alert(`Error: ${err.message}`);
-    } finally {
-      setProcessingId(null);
+      const result = await shareProject(model);
+      setNotice(result === 'shared' ? 'Progetto condiviso' : 'Pacchetto .locset scaricato');
+    } catch (error) {
+      if ((error as DOMException)?.name !== 'AbortError') setNotice('Condivisione non riuscita');
     }
   };
 
-  const getStatusBadge = (record: DigitalCloneRecord) => {
-    switch (record.status) {
-      case 'draft': return <span className="bg-slate-700 text-slate-300 px-2 py-1 rounded text-[10px] font-bold">DRAFT</span>;
-      case 'uploading': return <span className="bg-blue-900 text-blue-300 px-2 py-1 rounded text-[10px] font-bold animate-pulse">UPLOADING...</span>;
-      case 'processing': return <span className="bg-yellow-900 text-yellow-300 px-2 py-1 rounded text-[10px] font-bold animate-pulse">GENERATING...</span>;
-      case 'ready': return <span className="bg-green-900 text-green-300 px-2 py-1 rounded text-[10px] font-bold">READY</span>;
-      case 'error': return <span className="bg-red-900 text-red-300 px-2 py-1 rounded text-[10px] font-bold">ERROR</span>;
+  const handleImport = async (file?: File) => {
+    if (!file) return;
+    try {
+      const record = await parsePortableProject(file);
+      await saveModel(record);
+      await loadModels();
+      setNotice('Location importata nella libreria');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Importazione non riuscita');
     }
+    if (importRef.current) importRef.current.value = '';
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deleteModel(deleteTarget.id);
+    setDeleteTarget(null);
+    await loadModels();
+    setNotice('Location eliminata');
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <header className="p-6 border-b border-slate-900 bg-slate-950 sticky top-0 z-10 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/')} className="text-slate-400 hover:text-white transition">
-                <i className="fa-solid fa-chevron-left text-xl"></i>
-            </button>
-            <h1 className="text-2xl font-black italic tracking-tighter uppercase">Clone Library</h1>
-        </div>
-        <button onClick={() => navigate('/capture')} className="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2 rounded-xl text-sm font-bold transition shadow-lg shadow-cyan-900/40">
-            <i className="fa-solid fa-plus mr-2"></i>NEW
-        </button>
-      </header>
+    <AppFrame action={<button className="header-action" onClick={() => navigate('/capture')}><Icon name="plus"/><span>Nuova scansione</span></button>}>
+      <main className="library-page page-width">
+        <section className="library-heading">
+          <div><span className="eyebrow">Archivio locale</span><h1>Le tue location</h1><p>Gemelli digitali, riferimenti e piani di scena disponibili anche offline.</p></div>
+          <div className="library-heading__stats"><strong>{Math.max(0, models.length - 1)}</strong><span>location<br/>acquisite</span></div>
+        </section>
 
-      <main className="flex-1 p-6 overflow-y-auto">
+        <section className="library-toolbar">
+          <label className="search-field"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cerca una location…"/></label>
+          <button className="secondary-button" onClick={() => importRef.current?.click()}><Icon name="upload"/>Importa .locset</button>
+          <input ref={importRef} type="file" hidden accept=".locset,application/json" onChange={(event) => handleImport(event.target.files?.[0])}/>
+        </section>
+
         {loading ? (
-           <div className="flex justify-center items-center h-64">
-               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-cyan-500"></div>
-           </div>
-        ) : models.length === 0 ? (
-            <div className="text-center text-slate-700 mt-20">
-                <i className="fa-solid fa-ghost text-6xl mb-6 opacity-20"></i>
-                <p className="text-xl font-bold">No clones found.</p>
-            </div>
+          <div className="library-loading"><span/><p>Apro la libreria locale…</p></div>
+        ) : visibleModels.length ? (
+          <section className="location-grid">
+            {visibleModels.map((model) => (
+              <article className="location-card" key={model.id}>
+                <button className="location-card__preview" onClick={() => navigate(`/viewer/${model.id}`)} aria-label={`Apri ${model.name}`}>
+                  {model.thumbnail ? <img src={model.thumbnail} alt=""/> : <div className="demo-preview"><i/><i/><i/><span>STUDIO 04</span></div>}
+                  <span className="location-card__badge"><i/>PRONTA</span>
+                  <span className="location-card__photo-count"><Icon name="image" size={15}/>{model.images.length || 'DEMO'}</span>
+                </button>
+                <div className="location-card__body">
+                  <div className="location-card__title">
+                    <div><h2>{model.name}</h2><p>{model.isDemo ? 'Spazio dimostrativo' : `${model.images.length} viste · Elaborazione locale`}</p></div>
+                    {!model.isDemo && <button className="icon-button" onClick={() => setDeleteTarget(model)} aria-label="Elimina"><Icon name="trash" size={18}/></button>}
+                  </div>
+                  <div className="location-card__actions">
+                    <button onClick={() => navigate(`/viewer/${model.id}`)}><Icon name="eye"/>Esplora</button>
+                    <button onClick={() => navigate(`/viewer/${model.id}?edit=true`)}><Icon name="edit"/>Modifica</button>
+                    <button onClick={() => handleShare(model)}><Icon name="share"/><span className="sr-only">Condividi</span></button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </section>
         ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {models.map(model => {
-                  const isClone = 'status' in model;
-                  const record = model as DigitalCloneRecord;
-
-                  return (
-                    <div 
-                        key={model.id} 
-                        className={`bg-slate-900 rounded-3xl overflow-hidden shadow-xl border border-slate-800 transition-all ${record.status === 'ready' ? 'hover:border-cyan-500/50' : 'opacity-80'}`}
-                    >
-                        <div className="aspect-[4/3] relative bg-slate-800">
-                            {model.thumbnail && <img src={model.thumbnail} className="w-full h-full object-cover" alt="" />}
-                            <div className="absolute top-3 left-3">{isClone && getStatusBadge(record)}</div>
-                        </div>
-
-                        <div className="p-5 flex flex-col gap-3">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <h3 className="font-bold text-lg truncate uppercase tracking-tight">{model.name}</h3>
-                                    <p className="text-[10px] text-slate-500 font-mono mt-1">{new Date(model.date).toLocaleString()}</p>
-                                </div>
-                                <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Delete?")) deleteModel(model.id).then(loadData); }} className="text-slate-600 hover:text-red-500 p-2">
-                                    <i className="fa-solid fa-trash-can"></i>
-                                </button>
-                            </div>
-
-                            {isClone && record.status === 'ready' && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button 
-                                        onClick={() => navigate(`/viewer/${model.id}`)}
-                                        className="py-2 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
-                                    >
-                                        <i className="fa-solid fa-eye text-cyan-400"></i> VIEW
-                                    </button>
-                                    <button 
-                                        onClick={() => navigate(`/viewer/${model.id}?edit=true`)}
-                                        className="py-2 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/20"
-                                    >
-                                        <i className="fa-solid fa-pen-ruler"></i> EDIT
-                                    </button>
-                                </div>
-                            )}
-
-                            {isClone && record.status === 'draft' && (
-                                <button 
-                                    onClick={(e) => handleGenerateWorld(e, record)}
-                                    disabled={!!processingId}
-                                    className="w-full py-3 bg-white text-black rounded-xl font-black text-xs uppercase hover:bg-cyan-400 transition-colors"
-                                >
-                                    Generate World
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                  );
-                })}
-            </div>
+          <section className="library-empty"><span><Icon name="search" size={30}/></span><h2>Nessuna location trovata</h2><p>Prova un altro termine oppure avvia una nuova acquisizione.</p></section>
         )}
       </main>
-    </div>
+
+      {deleteTarget && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => setDeleteTarget(null)}>
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-title" onMouseDown={(event) => event.stopPropagation()}>
+            <span className="confirm-dialog__icon"><Icon name="trash"/></span>
+            <h2 id="delete-title">Eliminare “{deleteTarget.name}”?</h2>
+            <p>Foto, spazio 3D e modifiche verranno rimossi da questo dispositivo.</p>
+            <div><button className="secondary-button" onClick={() => setDeleteTarget(null)}>Annulla</button><button className="danger-button" onClick={confirmDelete}>Elimina</button></div>
+          </div>
+        </div>
+      )}
+      {notice && <div className="toast"><Icon name="check"/>{notice}</div>}
+    </AppFrame>
   );
 };
 
