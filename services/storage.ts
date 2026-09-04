@@ -10,8 +10,23 @@ const upgradeRecord = (raw: unknown): DigitalCloneRecord | null => {
   const candidate = raw as Partial<DigitalCloneRecord> & { images?: Blob[]; date?: string; thumbnail?: string };
   if (!Array.isArray(candidate.images) || !candidate.images.length || !candidate.id) return null;
   const date = candidate.date || new Date().toISOString();
+  const spaceKind = candidate.spaceKind || candidate.reconstruction?.spaceKind || 'room';
   const validObjects = candidate.edits?.objects?.every((item) => 'kind' in item) ? candidate.edits.objects : [];
   const validMasks = candidate.edits?.masks?.every((item) => 'size' in item) ? candidate.edits.masks : [];
+  const legacyPanels = candidate.reconstruction?.panels?.map((panel, imageIndex) => ({
+    ...panel,
+    imageIndex,
+    yaw: Math.abs(panel.yaw) <= Math.PI * 2 + 0.01 ? THREE_RAD_TO_DEG * panel.yaw : panel.yaw,
+    pitch: panel.pitch ?? 0,
+    role: panel.role ?? 'wall' as const,
+  })) || candidate.images.map((_, imageIndex) => ({
+    imageIndex,
+    yaw: (imageIndex / candidate.images!.length) * 360,
+    pitch: 0,
+    role: 'wall' as const,
+    brightness: 128,
+    sharpness: 10,
+  }));
   return {
     id: candidate.id,
     name: candidate.name || 'Location senza nome',
@@ -20,23 +35,22 @@ const upgradeRecord = (raw: unknown): DigitalCloneRecord | null => {
     status: 'ready',
     images: candidate.images,
     thumbnail: candidate.thumbnail || '',
-    reconstruction: candidate.reconstruction || {
+    spaceKind,
+    reconstruction: {
       version: 1,
-      roomRadius: 4.8,
-      roomHeight: 3,
-      floorColor: '#292b28',
-      ceilingColor: '#181b18',
-      panels: candidate.images.map((_, imageIndex) => ({
-        imageIndex,
-        yaw: (imageIndex / candidate.images!.length) * Math.PI * 2,
-        brightness: 128,
-        sharpness: 10,
-      })),
+      roomRadius: candidate.reconstruction?.roomRadius || 4.8,
+      roomHeight: candidate.reconstruction?.roomHeight || 3,
+      floorColor: candidate.reconstruction?.floorColor || '#292b28',
+      ceilingColor: candidate.reconstruction?.ceilingColor || '#181b18',
+      panels: legacyPanels,
+      spaceKind,
       fidelity: 'local-spatial-preview',
     },
     edits: { objects: validObjects, masks: validMasks },
   };
 };
+
+const THREE_RAD_TO_DEG = 180 / Math.PI;
 
 export const openDB = (): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {

@@ -45,7 +45,7 @@ const Home: React.FC = () => {
               <div className="scan-card__glyph" aria-hidden="true"><Icon name="scan" size={38}/><span/></div>
               <div>
                 <h2>Crea un nuovo<br/>gemello digitale</h2>
-                <p>8–16 foto sovrapposte · elaborazione sul dispositivo</p>
+                <p>16–28 foto guidate · pareti, sopra e sotto</p>
               </div>
             </div>
             <button className="primary-button primary-button--light" onClick={() => navigate('/capture')}>

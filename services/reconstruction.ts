@@ -1,5 +1,6 @@
 import type {
   CaptureQuality,
+  CapturedFrame,
   DigitalCloneRecord,
   ReconstructionProgress,
   SpatialPanel,
@@ -119,25 +120,28 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
 
 export const reconstructLocally = async (
   name: string,
-  rawPhotos: Blob[],
+  frames: CapturedFrame[],
+  spaceKind: DigitalCloneRecord['spaceKind'],
   onProgress: (state: ReconstructionProgress) => void,
 ): Promise<DigitalCloneRecord> => {
-  if (rawPhotos.length < 8) throw new Error('Servono almeno 8 foto per costruire lo spazio.');
+  if (frames.length < 8) throw new Error('Servono almeno 8 foto per costruire lo spazio.');
 
   const images: Blob[] = [];
   const panels: SpatialPanel[] = [];
 
-  for (let index = 0; index < rawPhotos.length; index += 1) {
+  for (let index = 0; index < frames.length; index += 1) {
     onProgress({
-      progress: 8 + Math.round((index / rawPhotos.length) * 58),
-      message: `Ottimizzo il fotogramma ${index + 1} di ${rawPhotos.length}`,
+      progress: 8 + Math.round((index / frames.length) * 58),
+      message: `Ottimizzo il fotogramma ${index + 1} di ${frames.length}`,
     });
-    const normalized = await normalizePhoto(rawPhotos[index]);
+    const normalized = await normalizePhoto(frames[index].blob);
     const quality = await analysePhoto(normalized);
     images.push(normalized);
     panels.push({
       imageIndex: index,
-      yaw: (index / rawPhotos.length) * Math.PI * 2,
+      yaw: frames[index].shot.yaw,
+      pitch: frames[index].shot.pitch,
+      role: frames[index].shot.role,
       brightness: quality.brightness,
       sharpness: quality.sharpness,
     });
@@ -145,9 +149,11 @@ export const reconstructLocally = async (
   }
 
   onProgress({ progress: 72, message: 'Allineo le viste nello spazio' });
+  const upperIndex = frames.findIndex((frame) => frame.shot.role === 'ceiling' || frame.shot.role === 'sky');
+  const lowerIndex = frames.findIndex((frame) => frame.shot.role === 'floor' || frame.shot.role === 'ground');
   const [ceilingColor, floorColor] = await Promise.all([
-    sampleEdgeColor(images[0], 'top'),
-    sampleEdgeColor(images[0], 'bottom'),
+    sampleEdgeColor(images[Math.max(0, upperIndex)], 'top'),
+    sampleEdgeColor(images[Math.max(0, lowerIndex)], 'bottom'),
   ]);
 
   const firstImage = await createImageBitmap(images[0]);
@@ -176,6 +182,11 @@ export const reconstructLocally = async (
   onProgress({ progress: 88, message: 'Genero collisioni e scala ambiente' });
   await nextFrame();
 
+  const dimensions = spaceKind === 'room'
+    ? { radius: 4.8, height: 3 }
+    : spaceKind === 'hall'
+      ? { radius: 8.5, height: 5.2 }
+      : { radius: 12, height: 8 };
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
@@ -185,13 +196,15 @@ export const reconstructLocally = async (
     status: 'ready',
     images,
     thumbnail: thumbnailCanvas.toDataURL('image/jpeg', 0.72),
+    spaceKind,
     reconstruction: {
       version: 1,
-      roomRadius: 4.8,
-      roomHeight: 3,
+      roomRadius: dimensions.radius,
+      roomHeight: dimensions.height,
       floorColor,
       ceilingColor,
       panels,
+      spaceKind,
       fidelity: 'local-spatial-preview',
     },
     edits: { objects: [], masks: [] },
@@ -208,6 +221,7 @@ export const createDemoRecord = (): DigitalCloneRecord => {
     status: 'ready',
     images: [],
     thumbnail: '',
+    spaceKind: 'hall',
     isDemo: true,
     reconstruction: {
       version: 1,
@@ -216,6 +230,7 @@ export const createDemoRecord = (): DigitalCloneRecord => {
       floorColor: '#222522',
       ceilingColor: '#15191a',
       panels: [],
+      spaceKind: 'hall',
       fidelity: 'local-spatial-preview',
     },
     edits: {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'locsetvr-shell-v2';
+const CACHE_NAME = 'locsetvr-shell-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/locsetvr-icon.svg'];
 
 self.addEventListener('install', (event) => {

@@ -5,9 +5,30 @@ export type CaptureQuality = {
   message: string;
 };
 
+export type SpaceKind = 'room' | 'hall' | 'outdoor';
+
+export type SurfaceRole = 'wall' | 'floor' | 'ceiling' | 'ground' | 'sky';
+
+export type CaptureShot = {
+  id: string;
+  role: SurfaceRole;
+  yaw: number;
+  pitch: number;
+  label: string;
+  instruction: string;
+};
+
+export type CapturedFrame = {
+  blob: Blob;
+  shot: CaptureShot;
+  quality: CaptureQuality;
+};
+
 export type SpatialPanel = {
   imageIndex: number;
   yaw: number;
+  pitch: number;
+  role: SurfaceRole;
   brightness: number;
   sharpness: number;
 };
@@ -19,6 +40,7 @@ export type SpatialReconstruction = {
   floorColor: string;
   ceilingColor: string;
   panels: SpatialPanel[];
+  spaceKind: SpaceKind;
   fidelity: 'local-spatial-preview';
 };
 
@@ -52,6 +74,7 @@ export type DigitalCloneRecord = {
   status: 'ready';
   images: Blob[];
   thumbnail: string;
+  spaceKind: SpaceKind;
   reconstruction: SpatialReconstruction;
   edits: SceneEdits;
   isDemo?: boolean;

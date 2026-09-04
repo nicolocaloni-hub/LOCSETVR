@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import * as THREE from 'three';
-import type { DigitalCloneRecord, MaskVolume, PropKind, SceneEdits, SceneProp } from '../types';
+import type { DigitalCloneRecord, MaskVolume, PropKind, SceneEdits, SceneProp, SpatialPanel } from '../types';
 import { getModelById, saveModel } from '../services/storage';
 import { shareProject } from '../services/share';
 import { Brand } from './AppFrame';
@@ -15,40 +15,144 @@ const PROP_DEFINITIONS: Array<{ kind: PropKind; label: string; icon: IconName; c
   { kind: 'marker', label: 'Marker', icon: 'plus', color: '#f2f1eb' },
 ];
 
-const buildPhotoAtlas = async (images: Blob[]): Promise<HTMLCanvasElement> => {
-  const panelWidth = 384;
-  const panelHeight = 512;
+const createPhotoTexture = async (image: Blob, renderer: THREE.WebGLRenderer): Promise<THREE.CanvasTexture> => {
+  const bitmap = await createImageBitmap(image);
+  const longest = Math.max(bitmap.width, bitmap.height);
+  const scale = Math.min(1, 1280 / longest);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.min(6144, panelWidth * images.length);
-  canvas.height = panelHeight;
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
   const context = canvas.getContext('2d', { alpha: false });
   if (!context) throw new Error('Impossibile creare le texture.');
-  context.fillStyle = '#202321';
-  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return texture;
+};
 
-  const actualPanelWidth = canvas.width / images.length;
-  for (let index = 0; index < images.length; index += 1) {
-    const bitmap = await createImageBitmap(images[index]);
-    const targetRatio = actualPanelWidth / panelHeight;
-    const sourceRatio = bitmap.width / bitmap.height;
-    const sourceWidth = sourceRatio > targetRatio ? bitmap.height * targetRatio : bitmap.width;
-    const sourceHeight = sourceRatio > targetRatio ? bitmap.height : bitmap.width / targetRatio;
-    context.drawImage(
-      bitmap,
-      (bitmap.width - sourceWidth) / 2,
-      (bitmap.height - sourceHeight) / 2,
-      sourceWidth,
-      sourceHeight,
-      index * actualPanelWidth,
-      0,
-      actualPanelWidth + 1,
-      panelHeight,
-    );
-    bitmap.close();
-    context.fillStyle = 'rgba(255,255,255,.12)';
-    context.fillRect(index * actualPanelWidth, 0, 1, panelHeight);
+const createSectorGeometry = (radius: number, centerDegrees: number, spanDegrees: number, height: number) => {
+  const angularSegments = 14;
+  const radialSegments = 8;
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const start = THREE.MathUtils.degToRad(centerDegrees - spanDegrees / 2);
+  const span = THREE.MathUtils.degToRad(spanDegrees);
+
+  for (let radial = 0; radial <= radialSegments; radial += 1) {
+    const distance = 0.04 + (radius - 0.04) * (radial / radialSegments);
+    for (let angular = 0; angular <= angularSegments; angular += 1) {
+      const angle = start + span * (angular / angularSegments);
+      positions.push(Math.sin(angle) * distance, height, Math.cos(angle) * distance);
+      uvs.push(angular / angularSegments, radial / radialSegments);
+    }
   }
-  return canvas;
+  for (let radial = 0; radial < radialSegments; radial += 1) {
+    for (let angular = 0; angular < angularSegments; angular += 1) {
+      const row = angularSegments + 1;
+      const first = radial * row + angular;
+      const second = first + row;
+      indices.push(first, second, first + 1, second, second + 1, first + 1);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+};
+
+const createProjectionMaterial = (texture: THREE.Texture, mirrored = false) => {
+  if (mirrored) {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.repeat.x = -1;
+    texture.offset.x = 1;
+  }
+  return new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false });
+};
+
+const addCapturedEnvironment = async (
+  scene: THREE.Scene,
+  renderer: THREE.WebGLRenderer,
+  record: DigitalCloneRecord,
+) => {
+  const { roomRadius: radius, roomHeight: height, panels } = record.reconstruction;
+  const byRole = (roles: SpatialPanel['role'][]) => panels.filter((panel) => roles.includes(panel.role));
+  const walls = byRole(['wall']);
+  const lower = byRole(['floor', 'ground']);
+  const upper = byRole(['ceiling', 'sky']);
+
+  const fallbackFloor = new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 72),
+    material(record.reconstruction.floorColor, 0.96),
+  );
+  fallbackFloor.rotation.x = -Math.PI / 2;
+  fallbackFloor.receiveShadow = true;
+  scene.add(fallbackFloor);
+
+  if (record.spaceKind !== 'outdoor') {
+    const fallbackTop = new THREE.Mesh(
+      new THREE.CircleGeometry(radius, 72),
+      material(record.reconstruction.ceilingColor, 0.98),
+    );
+    fallbackTop.rotation.x = Math.PI / 2;
+    fallbackTop.position.y = height;
+    scene.add(fallbackTop);
+  }
+
+  for (const panel of walls) {
+    const texture = await createPhotoTexture(record.images[panel.imageIndex], renderer);
+    const span = 360 / Math.max(1, walls.length);
+    const angle = THREE.MathUtils.degToRad(180 + panel.yaw);
+    const width = 2 * radius * Math.tan(THREE.MathUtils.degToRad(span / 2)) * 1.025;
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      createProjectionMaterial(texture),
+    );
+    mesh.position.set(Math.sin(angle) * radius, height / 2, Math.cos(angle) * radius);
+    mesh.lookAt(0, height / 2, 0);
+    scene.add(mesh);
+  }
+
+  for (const panel of lower) {
+    const texture = await createPhotoTexture(record.images[panel.imageIndex], renderer);
+    const span = 360 / Math.max(1, lower.length);
+    const mesh = new THREE.Mesh(
+      createSectorGeometry(radius, 180 + panel.yaw, span * 1.025, 0.015),
+      createProjectionMaterial(texture),
+    );
+    scene.add(mesh);
+  }
+
+  if (record.spaceKind === 'outdoor' && upper.length) {
+    for (const panel of upper) {
+      const texture = await createPhotoTexture(record.images[panel.imageIndex], renderer);
+      const span = 360 / Math.max(1, upper.length);
+      const geometry = new THREE.SphereGeometry(
+        radius,
+        18,
+        10,
+        Math.PI + THREE.MathUtils.degToRad(panel.yaw - span / 2),
+        THREE.MathUtils.degToRad(span * 1.02),
+        0,
+        Math.PI / 2,
+      );
+      scene.add(new THREE.Mesh(geometry, createProjectionMaterial(texture, true)));
+    }
+  } else {
+    for (const panel of upper) {
+      const texture = await createPhotoTexture(record.images[panel.imageIndex], renderer);
+      const span = 360 / Math.max(1, upper.length);
+      const mesh = new THREE.Mesh(
+        createSectorGeometry(radius, 180 + panel.yaw, span * 1.025, height - 0.015),
+        createProjectionMaterial(texture),
+      );
+      scene.add(mesh);
+    }
+  }
 };
 
 const material = (color: THREE.ColorRepresentation, roughness = 0.72) =>
@@ -216,8 +320,8 @@ const Viewer: React.FC = () => {
       recordRef.current = loadedRecord;
       setRecord(loadedRecord);
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color('#101210');
-      scene.fog = new THREE.FogExp2('#101210', 0.025);
+      scene.background = new THREE.Color(loadedRecord.images.length ? loadedRecord.reconstruction.ceilingColor : '#101210');
+      scene.fog = loadedRecord.images.length ? null : new THREE.FogExp2('#101210', 0.025);
       sceneRef.current = scene;
 
       const camera = new THREE.PerspectiveCamera(66, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.04, 80);
@@ -242,28 +346,26 @@ const Viewer: React.FC = () => {
 
       const radius = loadedRecord.reconstruction.roomRadius;
       const height = loadedRecord.reconstruction.roomHeight;
-      const floor = new THREE.Mesh(new THREE.CircleGeometry(radius, 72), material(loadedRecord.reconstruction.floorColor, 0.92));
-      floor.rotation.x = -Math.PI / 2;
-      floor.receiveShadow = true;
-      scene.add(floor);
-
-      const ceiling = new THREE.Mesh(new THREE.CircleGeometry(radius, 72), material(loadedRecord.reconstruction.ceilingColor, 0.96));
-      ceiling.rotation.x = Math.PI / 2;
-      ceiling.position.y = height;
-      scene.add(ceiling);
-
-      let wallMaterial: THREE.Material;
       if (loadedRecord.images.length) {
-        const atlas = await buildPhotoAtlas(loadedRecord.images);
+        await addCapturedEnvironment(scene, renderer, loadedRecord);
         if (cancelled) return;
-        const texture = new THREE.CanvasTexture(atlas);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.repeat.x = -1;
-        texture.offset.x = 1;
-        wallMaterial = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
       } else {
-        wallMaterial = material('#343a36', 0.9);
+        const floor = new THREE.Mesh(new THREE.CircleGeometry(radius, 72), material(loadedRecord.reconstruction.floorColor, 0.92));
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const ceiling = new THREE.Mesh(new THREE.CircleGeometry(radius, 72), material(loadedRecord.reconstruction.ceilingColor, 0.96));
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = height;
+        scene.add(ceiling);
+
+        const wall = new THREE.Mesh(
+          new THREE.CylinderGeometry(radius, radius, height, 96, 1, true),
+          new THREE.MeshStandardMaterial({ color: '#343a36', roughness: 0.9, side: THREE.BackSide }),
+        );
+        wall.position.y = height / 2;
+        scene.add(wall);
         const backPanel = new THREE.Mesh(new THREE.BoxGeometry(6.2, 2.45, 0.12), material('#545b54', 0.82));
         backPanel.position.set(0, 1.35, -4.55);
         scene.add(backPanel);
@@ -279,16 +381,13 @@ const Viewer: React.FC = () => {
         const sideBlock = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.25, 1.2), material('#262b28'));
         sideBlock.position.set(-3.35, 0.625, -1.4);
         scene.add(sideBlock);
-      }
-      const wall = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 96, 1, true), wallMaterial);
-      wall.position.y = height / 2;
-      scene.add(wall);
 
-      const grid = new THREE.GridHelper(radius * 1.7, 20, '#5e665e', '#313632');
-      grid.position.y = 0.008;
-      (grid.material as THREE.Material).transparent = true;
-      (grid.material as THREE.Material).opacity = 0.3;
-      scene.add(grid);
+        const grid = new THREE.GridHelper(radius * 1.7, 20, '#5e665e', '#313632');
+        grid.position.y = 0.008;
+        (grid.material as THREE.Material).transparent = true;
+        (grid.material as THREE.Material).opacity = 0.3;
+        scene.add(grid);
+      }
       syncEditLayer(loadedRecord.edits, null);
 
       const clock = new THREE.Clock();
@@ -500,7 +599,7 @@ const Viewer: React.FC = () => {
       <div className="viewer-vignette"/>
       <header className="viewer-header">
         <button className="glass-button" onClick={() => navigate('/library')} aria-label="Torna alla libreria"><Icon name="arrow-left"/></button>
-        <div className="viewer-title"><Brand compact/><i/><div><strong>{record?.name || 'Caricamento'}</strong><span>Scala 1:1 · {record?.isDemo ? 'Demo interattiva' : 'Elaborazione locale'}</span></div></div>
+        <div className="viewer-title"><Brand compact/><i/><div><strong>{record?.name || 'Caricamento'}</strong><span>Scala 1:1 · {record?.isDemo ? 'Demo interattiva' : 'Pareti + sopra + sotto'}</span></div></div>
         <div className="viewer-header__actions">
           <button className="glass-button" onClick={share} aria-label="Condividi"><Icon name="share"/></button>
           <button className={`mode-switch ${editMode ? 'mode-switch--active' : ''}`} onClick={() => setSearchParams(editMode ? {} : { edit: 'true' })}>
